@@ -1,13 +1,17 @@
 const getApiUrl = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   if (envUrl && envUrl !== "" && envUrl !== "/") return envUrl;
+
+  // Browser-side detection for Vercel
+  if (typeof window !== "undefined" && window.location.hostname.includes("vercel.app")) {
+    return "/_/backend";
+  }
+
   return process.env.NODE_ENV === "production" ? "/_/backend" : "http://localhost:8000";
 };
 
 const API_URL = getApiUrl();
-if (typeof window !== "undefined") {
-  console.log("Invoice Agent API URL:", API_URL);
-}
+console.log("Invoice Agent API URL:", API_URL);
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
