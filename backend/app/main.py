@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
+import os
+import traceback
+import sys
 
 from app.core.config import settings
 from app.api import invoices, exceptions, erp, gmail, notifications
@@ -24,7 +27,20 @@ async def lifespan(app: FastAPI):
         scheduler.shutdown()
 
 
+print(f"Supabase URL: {settings.supabase_url[:10]}...")
+print(f"Supabase Anon Key: {settings.supabase_anon_key[:10]}...")
+print(f"Gemini API Key: {settings.gemini_api_key[:10]}...")
+
 app = FastAPI(title="Invoice Processing Agent API", version="1.0.0", lifespan=lifespan)
+
+@app.middleware("http")
+async def log_exceptions_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        print(f"ERROR: {str(e)}", file=sys.stderr)
+        traceback.print_exc()
+        raise e
 
 app.add_middleware(
     CORSMiddleware,
