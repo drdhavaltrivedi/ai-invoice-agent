@@ -1,13 +1,14 @@
 const getApiUrl = () => {
-  // If we are on Vercel, always use the relative backend prefix
-  if (typeof window !== "undefined" && window.location.hostname.includes("vercel.app")) {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost") {
+      return "http://localhost:8000";
+    }
+    // On Vercel, always use the relative backend prefix to match vercel.json
     return "/_/backend";
   }
   
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.length > 1) return envUrl;
-  
-  return process.env.NODE_ENV === "production" ? "/_/backend" : "http://localhost:8000";
+  // Fallback for SSR
+  return "/_/backend";
 };
 
 const API_URL = getApiUrl();
