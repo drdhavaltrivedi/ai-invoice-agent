@@ -27,7 +27,8 @@ const navItems = [
   { href: "/erp/purchase-orders", label: "Purchase Orders", icon: ShoppingCart },
   { href: "/erp/grns", label: "GRNs", icon: Package },
   { href: "/erp/ledger", label: "AP Ledger", icon: BookOpen },
-  { type: "divider", label: "System" },
+  { type: "divider", label: "Support" },
+  { href: "/docs", label: "Documentation", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
