@@ -23,6 +23,19 @@ A production-ready, highly resilient AI-driven accounts payable automation syste
 - **Bulk Upload**: High-speed processing for manual document uploads.
 - **Real-time Notifications**: Instant alerts for processing exceptions or high-value invoice approvals.
 
+### Gmail Integration Setup
+To enable automated email polling:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable the **Gmail API**.
+3. Go to **APIs & Services > Credentials** and create an **OAuth 2.0 Client ID** (Type: Web Application).
+4. Add these **Authorized redirect URIs**:
+   - `http://localhost:8000/api/gmail/callback` (Local)
+   - `https://your-vercel-domain.vercel.app/api/gmail/callback` (Production)
+5. Set these variables in your `.env` or Vercel:
+   - `GMAIL_CLIENT_ID`
+   - `GMAIL_CLIENT_SECRET`
+   - `GMAIL_REDIRECT_URI` (must match the whitelisted one)
+
 ## 🛠 Tech Stack
 - **Frontend**: Next.js 15 (App Router), Tailwind CSS 4, TanStack Query, Framer Motion.
 - **Backend**: FastAPI, Python 3.10+.
