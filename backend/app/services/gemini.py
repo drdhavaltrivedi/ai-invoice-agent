@@ -54,43 +54,24 @@ def _get_client() -> genai.Client:
     return _client
 
 
-def _pdf_to_images(pdf_bytes: bytes) -> list[bytes]:
-    try:
-        from pdf2image import convert_from_bytes
-        pages = convert_from_bytes(pdf_bytes, dpi=200, fmt="jpeg")
-        result = []
-        for page in pages:
-            buf = io.BytesIO()
-            page.save(buf, format="JPEG", quality=85)
-            result.append(buf.getvalue())
-        return result
-    except Exception:
-        return []
+
 
 
 async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInvoiceData:
     client = _get_client()
     suffix = Path(filename).suffix.lower()
 
-    if suffix == ".pdf":
-        images = _pdf_to_images(file_bytes)
-        if not images:
-            raise ValueError("Could not convert PDF to images. Ensure poppler is installed.")
-        image_bytes_list = images[:3]
-        mime = "image/jpeg"
-    elif suffix in [".jpg", ".jpeg"]:
-        image_bytes_list = [file_bytes]
-        mime = "image/jpeg"
-    elif suffix == ".png":
-        image_bytes_list = [file_bytes]
-        mime = "image/png"
-    else:
-        image_bytes_list = [file_bytes]
-        mime = "image/jpeg"
-
     parts: list = [EXTRACTION_PROMPT]
-    for img in image_bytes_list:
-        parts.append(types.Part.from_bytes(data=img, mime_type=mime))
+    
+    if suffix == ".pdf":
+        parts.append(types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"))
+    elif suffix in [".jpg", ".jpeg"]:
+        parts.append(types.Part.from_bytes(data=file_bytes, mime_type="image/jpeg"))
+    elif suffix == ".png":
+        parts.append(types.Part.from_bytes(data=file_bytes, mime_type="image/png"))
+    else:
+        # Fallback to image/jpeg for unknown types
+        parts.append(types.Part.from_bytes(data=file_bytes, mime_type="image/jpeg"))
 
     response = client.models.generate_content(
         model=MODEL,
