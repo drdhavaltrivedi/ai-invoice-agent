@@ -23,6 +23,14 @@ A production-ready, highly resilient AI-driven accounts payable automation syste
 - **Bulk Upload**: High-speed processing for manual document uploads.
 - **Real-time Notifications**: Instant alerts for processing exceptions or high-value invoice approvals.
 
+### 🔐 Authentication & Google SSO
+The application is protected by **Supabase Auth**. To enable Google Login:
+1. Go to your [Supabase Dashboard](https://supabase.com/dashboard).
+2. Navigate to **Authentication > Providers** and enable **Google**.
+3. Input your `Client ID` and `Client Secret` from the Google Cloud Console.
+4. Add the Supabase callback URL (provided in the Supabase dashboard) to your Google Cloud Console **Authorized redirect URIs**.
+5. Users can also access a **Guest Demo Mode** which allows instant access to the dashboard without a Google account for evaluation.
+
 ### Gmail Integration Setup
 To enable automated email polling:
 1. Go to [Google Cloud Console](https://console.cloud.google.com/).
