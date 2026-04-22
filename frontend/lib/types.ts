@@ -95,7 +95,7 @@ export interface PurchaseOrder {
   status: "open" | "received" | "closed" | "cancelled";
   notes?: string;
   created_at: string;
-  vendors?: { name: string };
+  vendors?: { name: string; email?: string };
 }
 
 export interface GRN {
