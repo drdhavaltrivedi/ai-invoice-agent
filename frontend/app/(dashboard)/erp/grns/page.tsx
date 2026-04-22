@@ -76,32 +76,85 @@ export default function GRNsPage() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create GRN</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Purchase Order *</Label>
-              <Select value={poId} onValueChange={(v: string | null) => {
-                setPoId(v ?? "");
-                // Auto-generate GRN number if empty
-                if (!grnNumber) {
-                  const prefix = localStorage.getItem("grn_prefix") || "GRN-" + new Date().getFullYear() + "-";
-                  const count = (grns.length + 1).toString().padStart(3, "0");
-                  setGrnNumber(prefix + count);
-                }
-              }}>
-                <SelectTrigger><SelectValue placeholder="Select PO" /></SelectTrigger>
-                <SelectContent>{pos.filter(p => p.status === "open").map(p => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1"><Label>GRN Number *</Label><Input value={grnNumber} onChange={e => setGrnNumber(e.target.value)} /></div>
-            <div className="space-y-1"><Label>Received Date</Label><Input type="date" value={receivedDate} onChange={e => setReceivedDate(e.target.value)} /></div>
-            <div className="space-y-1"><Label>Notes</Label><Input value={notes} onChange={e => setNotes(e.target.value)} /></div>
+        <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[95vh] overflow-y-auto p-0 gap-0 border-none shadow-2xl">
+          <div className="p-6 border-b bg-white sticky top-0 z-20">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900">Create New GRN</DialogTitle>
+              <p className="text-sm text-gray-500">Record receipt of goods against a confirmed Purchase Order.</p>
+            </DialogHeader>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={!poId || !grnNumber || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Creating..." : "Create GRN"}</Button>
-          </DialogFooter>
+          
+          <div className="p-8 space-y-8 bg-gray-50/50">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">Purchase Order *</Label>
+                <Select value={poId} onValueChange={(v: string | null) => {
+                  setPoId(v ?? "");
+                  if (!grnNumber) {
+                    const prefix = localStorage.getItem("grn_prefix") || "GRN-" + new Date().getFullYear() + "-";
+                    const count = (grns.length + 1).toString().padStart(3, "0");
+                    setGrnNumber(prefix + count);
+                  }
+                }}>
+                  <SelectTrigger className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500 transition-all">
+                    <SelectValue placeholder="Select PO">
+                      {pos.find(p => p.id === poId)?.po_number}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {pos.filter(p => p.status === "open").map(p => (
+                      <SelectItem key={p.id} value={p.id} className="py-2.5">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{p.po_number}</span>
+                          <span className="text-xs text-gray-400">{p.vendors?.name}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">GRN Number *</Label>
+                <Input 
+                  value={grnNumber} 
+                  onChange={e => setGrnNumber(e.target.value)} 
+                  placeholder="e.g. GRN-2024-001" 
+                  className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500 font-mono" 
+                />
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">Received Date</Label>
+                <Input 
+                  type="date" 
+                  value={receivedDate} 
+                  onChange={e => setReceivedDate(e.target.value)} 
+                  className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500" 
+                />
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">Notes / Remarks</Label>
+                <Input 
+                  value={notes} 
+                  onChange={e => setNotes(e.target.value)} 
+                  placeholder="Any delivery discrepancies..." 
+                  className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 bg-white border-t flex justify-end gap-4 sticky bottom-0 z-20">
+            <Button variant="ghost" onClick={() => setOpen(false)} className="px-8 font-semibold text-gray-500 hover:text-gray-900">
+              Cancel
+            </Button>
+            <Button 
+              className="px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xl shadow-blue-200 h-12 rounded-xl transition-all active:scale-95"
+              disabled={!poId || !grnNumber || create.isPending} 
+              onClick={() => create.mutate()}
+            >
+              {create.isPending ? "Creating..." : "Confirm & Create GRN"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

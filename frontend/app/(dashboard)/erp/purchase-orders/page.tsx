@@ -113,7 +113,9 @@ export default function PurchaseOrdersPage() {
                   }
                 }}>
                   <SelectTrigger className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500 transition-all">
-                    <SelectValue placeholder="Select vendor" />
+                    <SelectValue placeholder="Select vendor">
+                      {vendors.find(v => v.id === vendorId)?.name}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
                     {vendors.map(v => (
