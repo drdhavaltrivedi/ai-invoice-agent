@@ -12,48 +12,44 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 TOKEN_FILE = "gmail_token.json"
 
 
+import urllib.parse
+import requests
+
 def get_gmail_auth_url() -> str:
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": settings.gmail_client_id,
-                "client_secret": settings.gmail_client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [settings.gmail_redirect_uri],
-            }
-        },
-        scopes=SCOPES,
-    )
-    flow.redirect_uri = settings.gmail_redirect_uri
-    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
-    return auth_url
+    params = {
+        "client_id": settings.gmail_client_id,
+        "redirect_uri": settings.gmail_redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+    return url
 
 
 def exchange_code_for_token(code: str) -> dict:
-    flow = Flow.from_client_config(
-        {
-            "web": {
-                "client_id": settings.gmail_client_id,
-                "client_secret": settings.gmail_client_secret,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [settings.gmail_redirect_uri],
-            }
-        },
-        scopes=SCOPES,
-    )
-    flow.redirect_uri = settings.gmail_redirect_uri
-    flow.fetch_token(code=code)
-    creds = flow.credentials
-    token_data = {
-        "token": creds.token,
-        "refresh_token": creds.refresh_token,
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes": list(creds.scopes or []),
+    data = {
+        "client_id": settings.gmail_client_id,
+        "client_secret": settings.gmail_client_secret,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": settings.gmail_redirect_uri,
     }
+    response = requests.post("https://oauth2.googleapis.com/token", data=data)
+    response.raise_for_status()
+    
+    token_response = response.json()
+    
+    token_data = {
+        "token": token_response.get("access_token"),
+        "refresh_token": token_response.get("refresh_token"),
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "client_id": settings.gmail_client_id,
+        "client_secret": settings.gmail_client_secret,
+        "scopes": SCOPES,
+    }
+
     with open(TOKEN_FILE, "w") as f:
         json.dump(token_data, f)
     return token_data
