@@ -90,90 +90,156 @@ export default function PurchaseOrdersPage() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Create New Purchase Order</DialogTitle>
-            <p className="text-sm text-gray-500">Enter the details for the new purchase order below.</p>
-          </DialogHeader>
-          
-          <div className="grid grid-cols-3 gap-6 py-4">
-            <div className="space-y-2">
-              <Label className="text-gray-700 font-semibold">Vendor *</Label>
-              <Select value={vendorId} onValueChange={(v: string | null) => setVendorId(v ?? "")}>
-                <SelectTrigger className="bg-white"><SelectValue placeholder="Select vendor" /></SelectTrigger>
-                <SelectContent>{vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-700 font-semibold">PO Number *</Label>
-              <Input value={poNumber} onChange={e => setPoNumber(e.target.value)} placeholder="e.g. PO-2024-001" className="bg-white" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-gray-700 font-semibold">PO Date</Label>
-              <Input type="date" value={poDate} onChange={e => setPoDate(e.target.value)} className="bg-white" />
-            </div>
+        <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[95vh] overflow-y-auto p-0 gap-0 border-none shadow-2xl">
+          <div className="p-6 border-b bg-white sticky top-0 z-20">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold text-gray-900">Create New Purchase Order</DialogTitle>
+              <p className="text-sm text-gray-500">Master record for procurement tracking and automated matching.</p>
+            </DialogHeader>
           </div>
-
-          <div className="mt-6 border-t pt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-800">Line Items</h3>
-              <Button variant="outline" size="sm" onClick={() => setLineItems(p => [...p, { description: "", qty: "", rate: "", amount: "" }])} className="border-blue-200 text-blue-600 hover:bg-blue-50">
-                <Plus className="h-4 w-4 mr-1" /> Add Item
-              </Button>
+          
+          <div className="p-8 space-y-8 bg-gray-50/50">
+            {/* Header Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">Vendor Details *</Label>
+                <Select value={vendorId} onValueChange={(v: string | null) => setVendorId(v ?? "")}>
+                  <SelectTrigger className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500 transition-all">
+                    <SelectValue placeholder="Select vendor" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px]">
+                    {vendors.map(v => (
+                      <SelectItem key={v.id} value={v.id} className="py-2.5 cursor-pointer">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{v.name}</span>
+                          <span className="text-xs text-gray-400">{v.email}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">PO Reference *</Label>
+                <Input 
+                  value={poNumber} 
+                  onChange={e => setPoNumber(e.target.value)} 
+                  placeholder="e.g. PO-2024-8832" 
+                  className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500" 
+                />
+              </div>
+              <div className="space-y-2.5">
+                <Label className="text-sm font-bold text-gray-700 uppercase tracking-tight">Issuance Date</Label>
+                <Input 
+                  type="date" 
+                  value={poDate} 
+                  onChange={e => setPoDate(e.target.value)} 
+                  className="bg-white border-gray-200 h-11 focus:ring-2 focus:ring-blue-500" 
+                />
+              </div>
             </div>
-            
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <div className="grid grid-cols-12 gap-4 mb-2 px-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                <div className="col-span-5">Description</div>
-                <div className="col-span-2 text-center">Quantity</div>
-                <div className="col-span-2 text-center">Rate (₹)</div>
-                <div className="col-span-2 text-right">Amount</div>
-                <div className="col-span-1"></div>
+
+            {/* Line Items Section */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-end">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-bold text-gray-900">Line Items</h3>
+                  <p className="text-xs text-gray-500">Individual goods or services being procured.</p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setLineItems(p => [...p, { description: "", qty: "", rate: "", amount: "" }])} 
+                  className="border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white transition-all font-semibold px-4"
+                >
+                  <Plus className="h-4 w-4 mr-1.5" /> Add New Row
+                </Button>
               </div>
               
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-                {lineItems.map((li, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-4 items-center bg-white p-2 rounded-lg border border-gray-200 shadow-sm transition-all hover:border-blue-200">
-                    <div className="col-span-5">
-                      <Input className="border-0 shadow-none focus-visible:ring-0 h-8" placeholder="Item description..." value={li.description} onChange={e => updateLI(i, "description", e.target.value)} />
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <div className="min-w-[800px] p-4">
+                    <div className="grid grid-cols-12 gap-4 mb-4 px-2 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b pb-2">
+                      <div className="col-span-6">Description / Item Details</div>
+                      <div className="col-span-2 text-center">Quantity</div>
+                      <div className="col-span-2 text-center">Unit Price (₹)</div>
+                      <div className="col-span-2 text-right pr-10">Total Amount</div>
                     </div>
-                    <div className="col-span-2">
-                      <Input className="border-0 shadow-none focus-visible:ring-0 h-8 text-center" type="number" value={li.qty} onChange={e => updateLI(i, "qty", e.target.value)} />
-                    </div>
-                    <div className="col-span-2">
-                      <Input className="border-0 shadow-none focus-visible:ring-0 h-8 text-center" type="number" value={li.rate} onChange={e => updateLI(i, "rate", e.target.value)} />
-                    </div>
-                    <div className="col-span-2 text-right py-1.5 font-medium text-gray-700">
-                      ₹{(+li.qty * +li.rate || 0).toLocaleString()}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-red-500 hover:bg-red-50" onClick={() => setLineItems(p => p.filter((_, j) => j !== i))} disabled={lineItems.length === 1}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    
+                    <div className="space-y-3">
+                      {lineItems.map((li, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-4 items-center group bg-gray-50/50 hover:bg-blue-50/30 p-2 rounded-xl transition-colors">
+                          <div className="col-span-6">
+                            <Input 
+                              className="border-none shadow-none focus-visible:ring-0 bg-transparent placeholder:text-gray-300 font-medium h-9" 
+                              placeholder="What are you purchasing?" 
+                              value={li.description} 
+                              onChange={e => updateLI(i, "description", e.target.value)} 
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input 
+                              className="border-none shadow-none focus-visible:ring-0 bg-transparent text-center font-semibold h-9" 
+                              type="number" 
+                              value={li.qty} 
+                              onChange={e => updateLI(i, "qty", e.target.value)} 
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input 
+                              className="border-none shadow-none focus-visible:ring-0 bg-transparent text-center font-semibold h-9" 
+                              type="number" 
+                              value={li.rate} 
+                              onChange={e => updateLI(i, "rate", e.target.value)} 
+                            />
+                          </div>
+                          <div className="col-span-2 flex items-center justify-end gap-3">
+                            <span className="font-bold text-gray-700 text-sm">
+                              ₹{(+li.qty * +li.rate || 0).toLocaleString()}
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all" 
+                              onClick={() => setLineItems(p => p.filter((_, j) => j !== i))} 
+                              disabled={lineItems.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-              
-              <div className="mt-6 flex justify-end border-t border-gray-200 pt-4">
-                <div className="text-right">
-                  <div className="text-sm text-gray-500">Grand Total</div>
-                  <div className="text-3xl font-bold text-blue-600">₹{lineItems.reduce((s, li) => s + +li.qty * +li.rate || 0, 0).toLocaleString()}</div>
+                </div>
+                
+                <div className="bg-gray-50 p-6 flex justify-between items-center border-t border-gray-200">
+                  <div className="text-xs text-gray-400 font-medium max-w-[200px]">
+                    Total amount is calculated automatically based on quantities and unit rates.
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Grand Total Payable</div>
+                    <div className="text-4xl font-black text-blue-600 tracking-tighter">
+                      ₹{lineItems.reduce((s, li) => s + +li.qty * +li.rate || 0, 0).toLocaleString()}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="mt-8 gap-3">
-            <Button variant="ghost" onClick={() => setOpen(false)} className="px-8">Cancel</Button>
+          <div className="p-6 bg-white border-t flex justify-end gap-4 sticky bottom-0 z-20">
+            <Button variant="ghost" onClick={() => setOpen(false)} className="px-8 font-semibold text-gray-500 hover:text-gray-900">
+              Discard Draft
+            </Button>
             <Button 
-              className="px-8 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg shadow-blue-200"
+              className="px-10 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-xl shadow-blue-200 h-12 rounded-xl transition-all active:scale-95"
               disabled={!vendorId || !poNumber || create.isPending} 
               onClick={() => create.mutate()}
             >
-              {create.isPending ? "Creating..." : "Confirm & Create PO"}
+              {create.isPending ? "Syncing to Ledger..." : "Confirm & Create PO"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
