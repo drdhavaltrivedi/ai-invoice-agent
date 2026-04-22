@@ -10,12 +10,15 @@ from app.core.config import settings
 from app.api import invoices, exceptions, erp, gmail, notifications
 
 
-scheduler = AsyncIOScheduler()
-
+try:
+    scheduler = AsyncIOScheduler()
+except Exception as e:
+    print(f"Warning: Could not initialize scheduler: {e}", file=sys.stderr)
+    scheduler = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not os.environ.get("VERCEL"):
+    if scheduler and not os.environ.get("VERCEL"):
         from app.services.gmail_poller import poll_gmail_for_invoices
         scheduler.add_job(poll_gmail_for_invoices, "interval", minutes=5, id="gmail_poll")
         scheduler.start()
@@ -23,15 +26,20 @@ async def lifespan(app: FastAPI):
     else:
         print("Running on Vercel: Scheduler disabled")
     yield
-    if scheduler.running:
+    if scheduler and scheduler.running:
         scheduler.shutdown()
 
 
-print(f"Supabase URL: {settings.supabase_url[:10]}...")
-print(f"Supabase Anon Key: {settings.supabase_anon_key[:10]}...")
-print(f"Gemini API Key: {settings.gemini_api_key[:10]}...")
+try:
+    print(f"Supabase URL: {settings.supabase_url[:10]}...")
+    print(f"Supabase Anon Key: {settings.supabase_anon_key[:10]}...")
+    print(f"Gemini API Key: {settings.gemini_api_key[:10]}...")
+except Exception as e:
+    print(f"Error printing settings: {e}")
 
 app = FastAPI(title="Invoice Processing Agent API", version="1.0.0", lifespan=lifespan)
+
+from fastapi.responses import JSONResponse
 
 @app.middleware("http")
 async def log_exceptions_middleware(request: Request, call_next):
@@ -40,7 +48,14 @@ async def log_exceptions_middleware(request: Request, call_next):
     except Exception as e:
         print(f"ERROR: {str(e)}", file=sys.stderr)
         traceback.print_exc()
-        raise e
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal Server Error",
+                "message": str(e),
+                "type": e.__class__.__name__
+            }
+        )
 
 app.add_middleware(
     CORSMiddleware,
