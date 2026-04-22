@@ -45,6 +45,8 @@ export const api = {
     },
     stats: () => request<any>("/api/invoices/stats/summary"),
     delete: (id: string) => request<any>(`/api/invoices/${id}`, { method: "DELETE" }),
+    update: (id: string, body: { extracted_data?: any; status?: string; run_matching?: boolean; learn?: boolean }) =>
+      request<any>(`/api/invoices/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   },
   exceptions: {
     list: (status = "open", page = 1) =>

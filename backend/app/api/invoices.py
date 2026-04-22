@@ -104,3 +104,57 @@ async def delete_invoice(invoice_id: str):
     if not result.data:
         raise HTTPException(404, "Invoice not found")
     return {"status": "success", "message": "Invoice deleted"}
+
+
+@router.patch("/{invoice_id}")
+async def update_invoice(invoice_id: str, body: dict):
+    db = get_supabase()
+    
+    # Get current state for learning
+    old_invoice = db.table("invoices").select("*").eq("id", invoice_id).single().execute()
+    
+    # Extract fields from body
+    extracted_data = body.get("extracted_data")
+    update_dict = {}
+    
+    if extracted_data:
+        update_dict["extracted_data"] = extracted_data
+        if "invoice_number" in extracted_data:
+            update_dict["invoice_number"] = extracted_data["invoice_number"]
+        if "po_number" in extracted_data:
+            update_dict["po_number"] = extracted_data["po_number"]
+        if "total" in extracted_data:
+            update_dict["total"] = extracted_data["total"]
+
+    if "status" in body:
+        update_dict["status"] = body["status"]
+
+    if not update_dict:
+        raise HTTPException(400, "No valid fields to update")
+
+    result = db.table("invoices").update(update_dict).eq("id", invoice_id).execute()
+    if not result.data:
+        raise HTTPException(404, "Invoice not found")
+
+    # AI Learning integration
+    if body.get("learn") and old_invoice.data:
+        from app.services.ai_learning import store_learning
+        # If it was an exception before, categorize it
+        reason = "Manual Correction"
+        exc_res = db.table("exceptions").select("reason").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+        if exc_res.data:
+            reason = exc_res.data[0]["reason"]
+            
+        store_learning(old_invoice.data, reason, {
+            "action": "edit",
+            "notes": "Workbench correction",
+            "po_number": extracted_data.get("po_number"),
+            "total": extracted_data.get("total")
+        })
+
+    # If status is updated or data changed, re-run matching if needed
+    if body.get("run_matching"):
+        from app.services.matcher import run_matching
+        await run_matching(invoice_id)
+
+    return result.data[0]

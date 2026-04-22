@@ -1,216 +1,298 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import Header from "@/components/layout/header";
 import { Invoice } from "@/lib/types";
 import StatusBadge from "@/components/invoices/status-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ExternalLink, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, ExternalLink, AlertTriangle, Save, Brain, Sparkles, CheckCircle, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { use } from "react";
+import { use, useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export default function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const qc = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [learnFromThis, setLearnFromThis] = useState(true);
+  const [formData, setFormData] = useState<any>(null);
+
   const { data: invoice, isLoading } = useQuery<Invoice>({
     queryKey: ["invoice", id],
     queryFn: () => api.invoices.get(id),
   });
 
+  useEffect(() => {
+    if (invoice?.extracted_data) {
+      setFormData({
+        vendor_name: invoice.extracted_data.vendor_name || "",
+        invoice_number: invoice.extracted_data.invoice_number || invoice.invoice_number || "",
+        invoice_date: invoice.extracted_data.invoice_date || "",
+        po_number: invoice.extracted_data.po_number || invoice.po_number || "",
+        subtotal: invoice.extracted_data.subtotal?.toString() || "",
+        tax: invoice.extracted_data.tax?.toString() || "",
+        total: invoice.extracted_data.total?.toString() || invoice.total?.toString() || "",
+      });
+    }
+  }, [invoice]);
+
+  const updateMutation = useMutation({
+    mutationFn: (payload: { data: any, learn: boolean }) => api.invoices.update(id, { 
+      extracted_data: payload.data,
+      run_matching: true,
+      learn: payload.learn
+    }),
+    onSuccess: () => {
+      toast.success("Invoice updated and re-matched");
+      qc.invalidateQueries({ queryKey: ["invoice", id] });
+      setIsEditing(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleSave = () => {
+    const updated = {
+      ...invoice?.extracted_data,
+      vendor_name: formData.vendor_name || null,
+      invoice_number: formData.invoice_number || null,
+      invoice_date: formData.invoice_date || null,
+      po_number: formData.po_number || null,
+      subtotal: formData.subtotal ? parseFloat(formData.subtotal) : null,
+      tax: formData.tax ? parseFloat(formData.tax) : null,
+      total: formData.total ? parseFloat(formData.total) : null,
+    };
+    
+    updateMutation.mutate({ data: updated, learn: learnFromThis });
+  };
+
   if (isLoading) return <div className="flex-1 p-6 flex items-center justify-center text-gray-400">Loading...</div>;
   if (!invoice) return <div className="flex-1 p-6 text-gray-400">Invoice not found</div>;
 
-  const ext = invoice.extracted_data;
+  const isPdf = invoice.raw_file_url?.toLowerCase().endsWith(".pdf");
 
   return (
-    <div className="flex flex-col flex-1 bg-gray-50/30">
-      <Header title="Invoice Processing Details" />
-      <div className="p-8 space-y-8 max-w-6xl mx-auto w-full">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/invoices">
-              <Button variant="ghost" size="sm" className="hover:bg-white text-gray-500 font-semibold group">
-                <ArrowLeft className="h-4 w-4 mr-1.5 group-hover:-translate-x-1 transition-transform" /> 
-                Back to Invoices
-              </Button>
-            </Link>
-            <div className="h-6 w-px bg-gray-200" />
-            <StatusBadge status={invoice.status} />
-            {invoice.invoice_number && <span className="text-gray-900 font-black tracking-tight text-lg">#{invoice.invoice_number}</span>}
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-50/30">
+      <Header title="Invoice Verification Workbench" />
+      
+      {/* Action Bar */}
+      <div className="bg-white border-b px-8 py-3 flex items-center justify-between shadow-sm z-10">
+        <div className="flex items-center gap-6">
+          <Link href="/invoices">
+            <Button variant="ghost" size="sm" className="hover:bg-gray-100 text-gray-500 font-bold group h-9">
+              <ArrowLeft className="h-4 w-4 mr-1.5 group-hover:-translate-x-1 transition-transform" /> 
+              Exit
+            </Button>
+          </Link>
+          <div className="h-6 w-px bg-gray-200" />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-black text-gray-900 tracking-tight">#{invoice.invoice_number || "Draft"}</span>
+              <StatusBadge status={invoice.status} />
+            </div>
+            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">ID: {id.slice(0, 8)}</span>
           </div>
         </div>
 
-        {invoice.exceptions && invoice.exceptions.filter(e => e.status === "open").map((exc) => (
-          <div key={exc.id} className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex gap-4 shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="font-bold text-amber-900 text-lg">Processing Exception Detected</p>
-              <p className="text-sm text-amber-800/80 leading-relaxed max-w-2xl">{exc.reason}</p>
-              <div className="mt-4 flex gap-3">
-                <Link href="/exceptions">
-                  <Button variant="outline" className="bg-white border-amber-200 text-amber-700 hover:bg-amber-100 font-bold px-6">
-                    Review in Exceptions Queue
-                  </Button>
-                </Link>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100">
+            <Brain className="h-4 w-4 text-blue-600" />
+            <span className="text-xs font-bold text-blue-700">AI Learning</span>
+            <button
+              onClick={() => setLearnFromThis(!learnFromThis)}
+              className={`w-9 h-5 rounded-full transition-colors relative ${learnFromThis ? "bg-blue-600" : "bg-gray-300"}`}
+            >
+              <div className={`w-3.5 h-3.5 bg-white rounded-full shadow transition-transform absolute top-0.75 left-0.75 ${learnFromThis ? "translate-x-4" : ""}`} />
+            </button>
+          </div>
+          
+          <Button 
+            className="bg-gray-900 text-white font-bold h-9 px-6 rounded-xl shadow-lg shadow-gray-200 active:scale-95 transition-all"
+            onClick={handleSave}
+            disabled={updateMutation.isPending}
+          >
+            {updateMutation.isPending ? (
+              <><RotateCcw className="h-4 w-4 mr-2 animate-spin" /> Matching...</>
+            ) : (
+              <><Save className="h-4 w-4 mr-2" /> Save & Match</>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex-1 flex overflow-hidden">
+        {/* LEFT: Data Pane */}
+        <div className="w-[45%] overflow-y-auto bg-white border-r p-8 space-y-8 scrollbar-hide">
+          
+          {invoice.exceptions && invoice.exceptions.filter(e => e.status === "open").map((exc) => (
+            <div key={exc.id} className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex gap-4 animate-in fade-in zoom-in duration-300">
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-amber-900 text-sm">Action Required</p>
+                <p className="text-xs text-amber-800/80 leading-relaxed mt-1">{exc.reason}</p>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-8 space-y-8">
-            <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden">
-              <CardHeader className="bg-white border-b pb-6">
-                <div className="flex justify-between items-center">
-                  <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Extracted Metadata</CardTitle>
-                  <Button variant="secondary" size="sm" className="text-xs font-bold uppercase tracking-widest bg-gray-100">
-                    Edit Data
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-8">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
-                  {[
-                    ["Vendor Name", ext?.vendor_name],
-                    ["Document Date", ext?.invoice_date],
-                    ["Invoice #", ext?.invoice_number],
-                    ["PO Reference", ext?.po_number],
-                  ].map(([label, value]) => (
-                    <div key={label as string} className="space-y-1">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
-                      <p className="font-bold text-gray-900 leading-none">{value ?? "—"}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-8 border-t border-gray-100">
-                  {[
-                    ["Subtotal", ext?.subtotal ? `₹${ext.subtotal.toLocaleString()}` : null],
-                    ["Tax Amount", ext?.tax ? `₹${ext.tax.toLocaleString()}` : null],
-                    ["Grand Total", ext?.total ? `₹${ext.total.toLocaleString()}` : null],
-                    ["Confidence", ext?.confidence_score ? `${Math.round(ext.confidence_score * 100)}%` : null],
-                  ].map(([label, value]) => (
-                    <div key={label as string} className="space-y-1">
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</p>
-                      <p className={`font-black text-lg leading-none ${label === "Grand Total" ? "text-blue-600" : "text-gray-900"}`}>
-                        {value ?? "—"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                {ext?.low_confidence_fields && ext.low_confidence_fields.length > 0 && (
-                  <div className="mt-10 p-4 bg-amber-50/50 rounded-2xl border border-amber-100">
-                    <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3">Validation Required</p>
-                    <div className="flex gap-2 flex-wrap">
-                      {ext.low_confidence_fields.map((f) => (
-                        <Badge key={f} className="bg-white text-amber-700 border-amber-200 text-xs font-bold px-3 py-1">
-                          {f}
-                        </Badge>
-                      ))}
-                    </div>
+          <section className="space-y-6">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">General Information</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="col-span-2 space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                  Vendor Name
+                  {(invoice.extracted_data?.confidence_score ?? 0) < 0.8 && <Sparkles className="h-3 w-3 text-amber-500" />}
+                </Label>
+                <Input 
+                  value={formData?.vendor_name} 
+                  onChange={e => setFormData({...formData, vendor_name: e.target.value})}
+                  className="bg-gray-50/50 border-gray-100 font-bold focus:bg-white transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Invoice Number</Label>
+                <Input 
+                  value={formData?.invoice_number} 
+                  onChange={e => setFormData({...formData, invoice_number: e.target.value})}
+                  className="bg-gray-50/50 border-gray-100 font-bold focus:bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Document Date</Label>
+                <Input 
+                  type="date"
+                  value={formData?.invoice_date} 
+                  onChange={e => setFormData({...formData, invoice_date: e.target.value})}
+                  className="bg-gray-50/50 border-gray-100 font-bold focus:bg-white"
+                />
+              </div>
+              <div className="col-span-2 space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PO Reference (System Match)</Label>
+                <div className="relative">
+                  <Input 
+                    value={formData?.po_number} 
+                    onChange={e => setFormData({...formData, po_number: e.target.value})}
+                    className={`bg-gray-50/50 border-gray-100 font-bold focus:bg-white pl-10 ${
+                      !formData?.po_number ? "border-amber-200 bg-amber-50/30" : "border-green-100 bg-green-50/10"
+                    }`}
+                  />
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2">
+                    {formData?.po_number ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
+          </section>
 
-            {ext?.line_items && ext.line_items.length > 0 && (
-              <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden">
-                <CardHeader className="bg-white border-b">
-                  <CardTitle className="text-xl font-black text-gray-900 tracking-tight">Line Item Reconciliation</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50/50 border-b">
-                        <th className="text-left px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Description</th>
-                        <th className="text-right px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Qty</th>
-                        <th className="text-right px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Unit Rate</th>
-                        <th className="text-right px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {ext.line_items.map((li, i) => (
-                        <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-gray-700">{li.description}</td>
-                          <td className="px-6 py-4 text-right font-bold text-gray-900">{li.qty}</td>
-                          <td className="px-6 py-4 text-right text-gray-500">₹{li.rate?.toLocaleString()}</td>
-                          <td className="px-6 py-4 text-right font-black text-gray-900">₹{li.amount?.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </CardContent>
-              </Card>
+          <section className="space-y-6 pt-8 border-t">
+            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">Financial Totals</h3>
+            <div className="grid grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Subtotal</Label>
+                <Input 
+                  value={formData?.subtotal} 
+                  onChange={e => setFormData({...formData, subtotal: e.target.value})}
+                  className="bg-gray-50/50 border-gray-100 font-black text-gray-700"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Tax Amount</Label>
+                <Input 
+                  value={formData?.tax} 
+                  onChange={e => setFormData({...formData, tax: e.target.value})}
+                  className="bg-gray-50/50 border-gray-100 font-black text-gray-700"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Grand Total</Label>
+                <Input 
+                  value={formData?.total} 
+                  onChange={e => setFormData({...formData, total: e.target.value})}
+                  className="bg-blue-50 border-blue-100 font-black text-blue-700 focus:bg-white"
+                />
+              </div>
+            </div>
+          </section>
+
+          {invoice.invoice_matches && invoice.invoice_matches.length > 0 && (
+            <section className="space-y-6 pt-8 border-t">
+              <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">ERP Reconciliation Status</h3>
+              <div className="bg-gray-900 rounded-3xl p-6 text-white space-y-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">3-Way Match Result</span>
+                  <Badge className="bg-white/10 text-white border-0 text-[10px] font-black uppercase tracking-wider">
+                    {invoice.invoice_matches[0].match_status.replace("_", " ")}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-8">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">PO Linked</p>
+                    <p className="text-lg font-black">{invoice.invoice_matches[0].purchase_orders?.po_number || "—"}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">GRN Verified</p>
+                    <p className="text-lg font-black">{invoice.invoice_matches[0].grns?.grn_number || "—"}</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* RIGHT: Document Pane */}
+        <div className="flex-1 bg-gray-200 relative group">
+          <div className="absolute inset-0 flex items-center justify-center">
+            {isPdf ? (
+              <iframe 
+                src={`${invoice.raw_file_url}#toolbar=0&navpanes=0`}
+                className="w-full h-full border-none shadow-2xl"
+                title="Invoice Document"
+              />
+            ) : (
+              <div className="w-full h-full p-8 overflow-auto flex items-start justify-center">
+                <img 
+                  src={invoice.raw_file_url} 
+                  alt="Invoice" 
+                  className="max-w-full h-auto shadow-2xl rounded-lg"
+                />
+              </div>
             )}
           </div>
+          
+          {/* Floating Controls */}
+          <div className="absolute top-6 right-6 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <a href={invoice.raw_file_url} target="_blank" rel="noreferrer">
+              <Button size="sm" className="bg-white/90 backdrop-blur text-gray-900 font-bold hover:bg-white shadow-xl">
+                <ExternalLink className="h-4 w-4 mr-2" /> Open Full
+              </Button>
+            </a>
+          </div>
 
-          <div className="lg:col-span-4 space-y-8">
-            <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden">
-              <CardHeader className="bg-white border-b">
-                <CardTitle className="text-base font-black text-gray-900 tracking-tight">Original Document</CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="aspect-[3/4] bg-gray-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-gray-200 mb-6 group relative overflow-hidden">
-                  <div className="text-center z-10">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Source: {invoice.source}</p>
-                    <a href={invoice.raw_file_url} target="_blank" rel="noreferrer">
-                      <Button variant="outline" size="sm" className="bg-white shadow-lg border-none font-bold hover:scale-105 transition-all">
-                        <ExternalLink className="h-4 w-4 mr-2" /> Open Full PDF
-                      </Button>
-                    </a>
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-gray-900/5 to-transparent pointer-events-none" />
+          {/* Confidence Indicator Overlay */}
+          <div className="absolute bottom-6 left-6">
+            <div className="bg-white/90 backdrop-blur rounded-2xl p-4 shadow-xl border border-white/50">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Extraction Quality</p>
+              <div className="flex items-center gap-3">
+                <div className="h-2 w-32 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-1000 ${
+                      (invoice.extracted_data?.confidence_score || 0) > 0.8 ? "bg-green-500" : "bg-amber-500"
+                    }`}
+                    style={{ width: `${Math.round((invoice.extracted_data?.confidence_score || 0) * 100)}%` }}
+                  />
                 </div>
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500 font-medium">Processing Time</span>
-                    <span className="text-xs font-bold text-gray-900">1.2s</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500 font-medium">Source Type</span>
-                    <Badge variant="outline" className="text-[10px] font-bold uppercase">{invoice.source}</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {invoice.invoice_matches && invoice.invoice_matches.length > 0 && (
-              <Card className="border-none shadow-xl shadow-gray-200/50 rounded-3xl overflow-hidden bg-blue-600 text-white">
-                <CardHeader className="border-b border-white/10">
-                  <CardTitle className="text-base font-black tracking-tight">Smart Match Discovery</CardTitle>
-                </CardHeader>
-                <CardContent className="p-6 space-y-6">
-                  {invoice.invoice_matches.map((m) => (
-                    <div key={m.id} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Matched PO</p>
-                          <p className="font-bold">{m.purchase_orders?.po_number ?? "—"}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">Linked GRN</p>
-                          <p className="font-bold">{m.grns?.grn_number ?? "—"}</p>
-                        </div>
-                      </div>
-                      <div className="pt-4 border-t border-white/10">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-xs font-medium text-blue-100">Match Confidence</span>
-                          <span className="text-lg font-black">{m.match_score ? `${Math.round(m.match_score * 100)}%` : "—"}</span>
-                        </div>
-                        <Badge className="bg-white/20 text-white border-0 text-[10px] font-black uppercase w-full justify-center py-1.5">
-                          {m.match_status.replace("_", " ")}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            )}
+                <span className="font-black text-sm text-gray-900">
+                  {Math.round((invoice.extracted_data?.confidence_score || 0) * 100)}%
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
