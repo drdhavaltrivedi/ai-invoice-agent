@@ -22,9 +22,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   
   const url = `${baseUrl}${cleanPath}`;
   
+  const headers: Record<string, string> = { ...options?.headers };
+  if (!(options?.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+  
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -41,7 +46,7 @@ export const api = {
     upload: (file: File) => {
       const form = new FormData();
       form.append("file", file);
-      return fetch(`${API_URL}/api/invoices/upload`, { method: "POST", body: form }).then((r) => r.json());
+      return request<any>("/api/invoices/upload", { method: "POST", body: form, headers: {} });
     },
     stats: () => request<any>("/api/invoices/stats/summary"),
     delete: (id: string) => request<any>(`/api/invoices/${id}`, { method: "DELETE" }),
