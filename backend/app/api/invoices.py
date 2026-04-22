@@ -95,3 +95,12 @@ async def get_invoice(invoice_id: str):
     if not result.data:
         raise HTTPException(404, "Invoice not found")
     return result.data
+
+
+@router.delete("/{invoice_id}")
+async def delete_invoice(invoice_id: str):
+    db = get_supabase()
+    result = db.table("invoices").delete().eq("id", invoice_id).execute()
+    if not result.data:
+        raise HTTPException(404, "Invoice not found")
+    return {"status": "success", "message": "Invoice deleted"}

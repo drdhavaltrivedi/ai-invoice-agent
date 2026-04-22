@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import Header from "@/components/layout/header";
 import { Invoice } from "@/lib/types";
@@ -9,7 +9,7 @@ import StatusBadge from "@/components/invoices/status-badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Eye, Mail, Upload } from "lucide-react";
+import { Eye, Mail, Upload, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 
@@ -25,6 +25,14 @@ export default function InvoicesPage() {
 
   const invoices: Invoice[] = data?.data ?? [];
   const total: number = data?.total ?? 0;
+
+  const qc = useQueryClient();
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.invoices.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
+  });
 
   return (
     <div className="flex flex-col flex-1">
@@ -61,7 +69,7 @@ export default function InvoicesPage() {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Source</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Received</th>
-                  <th className="px-4 py-3" />
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -81,7 +89,7 @@ export default function InvoicesPage() {
                   </tr>
                 ) : (
                   invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <tr key={inv.id} className="border-b hover:bg-gray-50 transition-colors group">
                       <td className="px-4 py-3 font-medium">{inv.invoice_number ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-600">{inv.vendors?.name ?? inv.extracted_data?.vendor_name ?? "—"}</td>
                       <td className="px-4 py-3 text-gray-600">{inv.po_number ?? "—"}</td>
@@ -99,10 +107,27 @@ export default function InvoicesPage() {
                       <td className="px-4 py-3 text-gray-500">
                         {formatDistanceToNow(new Date(inv.created_at), { addSuffix: true })}
                       </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/invoices/${inv.id}`}>
-                          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        </Link>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                          <Link href={`/invoices/${inv.id}`}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => {
+                              if (confirm("Are you sure you want to delete this invoice?")) {
+                                deleteMutation.mutate(inv.id);
+                              }
+                            }}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))

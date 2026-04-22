@@ -44,6 +44,7 @@ export const api = {
       return fetch(`${API_URL}/api/invoices/upload`, { method: "POST", body: form }).then((r) => r.json());
     },
     stats: () => request<any>("/api/invoices/stats/summary"),
+    delete: (id: string) => request<any>(`/api/invoices/${id}`, { method: "DELETE" }),
   },
   exceptions: {
     list: (status = "open", page = 1) =>
