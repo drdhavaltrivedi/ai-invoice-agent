@@ -208,12 +208,22 @@ async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInv
                 except Exception as e:
                     last_error = e
 
-    # All strategies exhausted
+    # ── Strategy 4: Local OCR fallback — no API needed ──
+    print("[Gemini] All AI models failed. Falling back to local OCR extraction...")
+    try:
+        from app.services.ocr_extractor import extract_with_ocr
+        result = extract_with_ocr(file_bytes, filename)
+        if result:
+            print("[Gemini] ✓ Local OCR extraction succeeded (lower confidence)")
+            return result
+    except Exception as ocr_error:
+        print(f"[Gemini] ✗ Local OCR also failed: {ocr_error}")
+
+    # Everything failed
     total_combos = len(api_keys) * len(API_VERSIONS) * len(MODEL_CASCADE)
     raise ValueError(
-        f"All {total_combos} model combinations failed after {attempts} attempts. "
-        f"Models: {MODEL_CASCADE}. API versions: {API_VERSIONS}. "
-        f"Keys available: {len(api_keys)}. "
-        f"Last error: {last_error}. "
+        f"All {total_combos} AI model combinations + local OCR failed after {attempts} attempts. "
+        f"Models: {MODEL_CASCADE}. "
+        f"Last AI error: {last_error}. "
         f"Tip: Check your API quota at https://aistudio.google.com/apikey"
     )
