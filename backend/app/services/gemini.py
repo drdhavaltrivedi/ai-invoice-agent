@@ -1,7 +1,6 @@
-import base64
 import json
 import re
-import io
+import asyncio
 from pathlib import Path
 
 from google import genai
@@ -12,9 +11,12 @@ from app.models.schemas import ExtractedInvoiceData
 
 _client: genai.Client | None = None
 
-MODEL_PRIMARY = "gemini-2.0-flash"
-MODEL_FALLBACK = "gemini-1.5-pro-latest"
-MODEL_FALLBACK_2 = "gemini-3.1-flash-lite"
+# Ordered list of models to try — first success wins.
+# Only includes models confirmed available for the current API key.
+MODEL_CASCADE = [
+    "gemini-2.0-flash",          # Primary: fast multimodal, PDF-native
+    "gemini-2.0-flash-lite",     # Fallback: lightweight, lower quota cost
+]
 
 EXTRACTION_PROMPT = """
 You are an expert invoice data extraction system. Analyze the provided invoice image and extract all relevant information.
@@ -55,12 +57,13 @@ def _get_client() -> genai.Client:
         _client = genai.Client(api_key=settings.gemini_api_key)
     return _client
 
+
 async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInvoiceData:
     client = _get_client()
     suffix = Path(filename).suffix.lower()
 
     parts: list = [EXTRACTION_PROMPT]
-    
+
     if suffix == ".pdf":
         parts.append(types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"))
     elif suffix in [".jpg", ".jpeg"]:
@@ -70,31 +73,45 @@ async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInv
     else:
         parts.append(types.Part.from_bytes(data=file_bytes, mime_type="image/jpeg"))
 
-    try:
-        # Try primary model first
-        response = client.models.generate_content(
-            model=MODEL_PRIMARY,
-            contents=parts,
-        )
-    except Exception as e:
-        print(f"Primary model {MODEL_PRIMARY} failed: {e}. Retrying with fallback {MODEL_FALLBACK}...")
-        try:
-            # Fallback to high-capacity model
-            response = client.models.generate_content(
-                model=MODEL_FALLBACK,
-                contents=parts,
-            )
-        except Exception as e2:
-            print(f"Fallback model {MODEL_FALLBACK} failed: {e2}. Retrying with secondary fallback {MODEL_FALLBACK_2}...")
-            # Secondary fallback to Flash Lite
-            response = client.models.generate_content(
-                model=MODEL_FALLBACK_2,
-                contents=parts,
-            )
+    # Try each model in the cascade with retry for rate limits
+    last_error = None
 
-    raw = response.text.strip()
-    raw = re.sub(r"```json\s*", "", raw)
-    raw = re.sub(r"```\s*", "", raw)
+    for model_name in MODEL_CASCADE:
+        # Retry up to 3 times per model with exponential backoff for rate limits
+        for attempt in range(3):
+            try:
+                print(f"[Gemini] Attempting extraction with {model_name} (attempt {attempt + 1})")
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=parts,
+                )
 
-    data = json.loads(raw)
-    return ExtractedInvoiceData(**data)
+                raw = response.text.strip()
+                raw = re.sub(r"```json\s*", "", raw)
+                raw = re.sub(r"```\s*", "", raw)
+
+                data = json.loads(raw)
+                print(f"[Gemini] ✓ Extraction successful with {model_name}")
+                return ExtractedInvoiceData(**data)
+
+            except Exception as e:
+                last_error = e
+                error_str = str(e)
+                print(f"[Gemini] ✗ {model_name} attempt {attempt + 1} failed: {error_str[:120]}")
+
+                # If rate limited (429), wait and retry the same model
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    wait_time = (2 ** attempt) * 5  # 5s, 10s, 20s
+                    print(f"[Gemini] Rate limited. Waiting {wait_time}s before retry...")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    # For non-rate-limit errors (404, etc.), skip to next model
+                    break
+
+    # All models and retries failed
+    raise ValueError(
+        f"All Gemini models failed after retries. "
+        f"Models tried: {MODEL_CASCADE}. "
+        f"Last error: {last_error}"
+    )
