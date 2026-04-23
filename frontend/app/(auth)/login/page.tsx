@@ -17,6 +17,9 @@ export default function LoginPage() {
   async function handleGoogleLogin() {
     setIsLoading(true);
     try {
+      // Clear demo mode before logging in
+      localStorage.removeItem("invoice_demo_mode");
+      document.cookie = "invoice_demo_mode=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       await signInWithGoogle();
     } catch (error: any) {
       toast.error(error.message || "Failed to sign in");

@@ -39,6 +39,15 @@ function GmailIntegration() {
   }, [searchParams, refetch]);
 
   async function handleConnect() {
+    if (api.isDemo()) {
+      toast.info("Please sign up first to connect your real Gmail account!", {
+        action: {
+          label: "Sign Up",
+          onClick: () => window.location.href = "/login"
+        }
+      });
+      return;
+    }
     const res = await api.gmail.connect();
     if (res.auth_url) window.location.href = res.auth_url;
   }
@@ -63,6 +72,11 @@ function GmailIntegration() {
             <Badge className="bg-gray-100 text-gray-600 border-0">Not connected</Badge>
           )}
         </div>
+        {api.isDemo() && (
+          <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
+            <strong>Demo Mode:</strong> You are viewing dummy data. Sign up to connect your own Gmail and process real invoices.
+          </div>
+        )}
         <div className="flex gap-2">
           {!status?.connected ? (
             <Button onClick={handleConnect} className="gap-1">

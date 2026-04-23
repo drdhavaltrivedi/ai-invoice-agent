@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.core.supabase import get_supabase
 from app.models.schemas import VendorCreate, VendorUpdate, PurchaseOrderCreate, GRNCreate
+from app.services.embeddings import generate_embedding, generate_po_search_string
 
 router = APIRouter(prefix="/api/erp", tags=["erp"])
 
@@ -48,6 +49,14 @@ async def create_purchase_order(body: PurchaseOrderCreate):
         raise HTTPException(400, f"PO number {body.po_number} already exists")
     data = body.model_dump()
     data["status"] = "open"
+    
+    # Generate embedding for semantic matching
+    try:
+        search_str = generate_po_search_string(data)
+        data["embedding"] = generate_embedding(search_str)
+    except Exception as e:
+        print(f"Warning: Could not generate PO embedding: {e}")
+        
     result = db.table("purchase_orders").insert(data).execute()
     return result.data[0]
 

@@ -13,8 +13,11 @@ export async function middleware(request: NextRequest) {
   const isProtectedPath = protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))
 
   if (!session && isProtectedPath) {
-    // Check if it's a demo request
-    if (request.nextUrl.searchParams.get('demo') === 'true') {
+    // Check if it's a demo request (via param or cookie)
+    const isDemoParam = request.nextUrl.searchParams.get("demo") === "true";
+    const isDemoCookie = request.cookies.get("invoice_demo_mode")?.value === "true";
+
+    if (isDemoParam || isDemoCookie) {
       return supabaseResponse;
     }
 

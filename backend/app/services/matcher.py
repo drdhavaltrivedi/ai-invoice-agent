@@ -1,6 +1,7 @@
 from typing import Optional
 from app.core.supabase import get_supabase
 from app.models.schemas import MatchStatus
+from app.services.matching import find_best_po_match
 
 AMOUNT_TOLERANCE = 0.02  # 2% tolerance
 
@@ -39,7 +40,20 @@ async def run_matching(invoice_id: str) -> dict:
                 db.table("invoices").update({"po_number": po_number}).eq("id", invoice_id).execute()
 
     if not po_res.data:
-        await _flag_exception(invoice_id, f"PO number {po_number} not found in system")
+        # --- NEW: Semantic Similarity Fallback ---
+        print(f"[Matcher] PO {po_number} not found. Trying semantic similarity search...")
+        semantic_match = await find_best_po_match(extracted if extracted else invoice)
+        
+        if semantic_match:
+            print(f"[Matcher] ✓ Found semantic match with PO {semantic_match['po_number']}")
+            po_res = db.table("purchase_orders").select("*").eq("id", semantic_match["id"]).execute()
+            if po_res.data:
+                po_number = po_res.data[0]["po_number"]
+                # Update invoice with the semantically matched PO
+                db.table("invoices").update({"po_number": po_number}).eq("id", invoice_id).execute()
+
+    if not po_res.data:
+        await _flag_exception(invoice_id, f"PO number {po_number} not found in system (Exact & Semantic check failed)")
         return {"status": "exception", "reason": "po_not_found"}
 
     po = po_res.data[0]

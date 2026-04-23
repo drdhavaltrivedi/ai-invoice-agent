@@ -74,6 +74,24 @@ Rules:
 - Be precise — extract exact values shown on the invoice
 """
 
+AUDIT_PROMPT = """
+You are an expert invoice auditor. You have been provided with an invoice image and a JSON object representing the data extracted from it.
+Your task is to VERIFY the data and CORRECT it if necessary.
+
+Rules:
+1. Check if the line items sum up to the subtotal.
+2. Check if subtotal + tax = total.
+3. Verify vendor names and dates against the image.
+4. Ensure no "Total" or "Tax" lines from the image were accidentally included as "Line Items".
+5. Standardize date formats to YYYY-MM-DD.
+
+Input Data:
+{data_json}
+
+Return the corrected JSON object. If everything is perfect, return the original JSON.
+Return ONLY the raw JSON object.
+"""
+
 
 def _get_api_keys() -> list[str]:
     """Return all available API keys (primary + backup)."""
@@ -174,6 +192,38 @@ async def _try_extraction(
     return None  # All retries exhausted for this model
 
 
+async def audit_extracted_data(
+    data: ExtractedInvoiceData, file_bytes: bytes, filename: str, client: genai.Client, model: str
+) -> ExtractedInvoiceData:
+    """
+    Agentic Auditor Pass:
+    Sends the initial extraction + original file back to the model for a reasoning check.
+    """
+    try:
+        print(f"[Gemini Auditor] Auditing results with {model}...")
+        prompt = AUDIT_PROMPT.format(data_json=json.dumps(data.model_dump(), indent=2))
+        
+        # Build multimodal parts for the audit
+        parts = [prompt]
+        suffix = Path(filename).suffix.lower()
+        mime_map = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+        parts.append(types.Part.from_bytes(data=file_bytes, mime_type=mime_map.get(suffix, "image/jpeg")))
+
+        response = client.models.generate_content(model=model, contents=parts)
+        audited_data = _parse_response(response.text)
+        
+        # Log if changes were made
+        if audited_data.total != data.total:
+            print(f"[Gemini Auditor] ⚠ Fixed total: {data.total} -> {audited_data.total}")
+        else:
+            print("[Gemini Auditor] ✓ Data verified (no changes needed)")
+            
+        return audited_data
+    except Exception as e:
+        print(f"[Gemini Auditor] ✗ Audit failed: {e}. Returning original data.")
+        return data
+
+
 async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInvoiceData:
     """
     Multi-strategy extraction pipeline:
@@ -192,7 +242,8 @@ async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInv
             client = _get_client(key, ls["api_version"])
             result = await _try_extraction(client, ls["model"], parts, ls["api_version"], key_label)
             if result:
-                return result
+                # Perform the Audit pass
+                return await audit_extracted_data(result, file_bytes, filename, client, ls["model"])
         print("[Gemini] Last-success cache miss. Running full cascade...")
 
     # ── Strategy 1-3: Full cascade ──
@@ -208,7 +259,8 @@ async def extract_invoice_data(file_bytes: bytes, filename: str) -> ExtractedInv
                 try:
                     result = await _try_extraction(client, model, parts, api_version, key_label)
                     if result:
-                        return result
+                        # Perform the Audit pass
+                        return await audit_extracted_data(result, file_bytes, filename, client, model)
                 except Exception as e:
                     last_error = e
 
